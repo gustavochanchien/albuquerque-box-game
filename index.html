@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Albuquerque Box: Wind Visualizer and Minigame</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- MapLibre CSS -->
+    <link
+        href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.css"
+        rel="stylesheet"
+    />
+
+    <!-- App styles -->
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <!-- Main 3D map -->
+    <div id="map"></div>
+
+    <!-- Wind visualization overlay -->
+    <canvas id="wind-canvas"></canvas>
+
+    <!-- HUD: Altimeter + Minimap -->
+    <div id="hud-container">
+        <!-- Vertical altitude bar -->
+        <div id="altimeter-box">
+            <div id="alt-gradient"></div>
+            <div id="alt-needle"></div>
+            <div id="alt-text">5000</div>
+        </div>
+
+        <!-- Circular minimap with wind orbit indicators -->
+        <div id="minimap-wrapper">
+            <div id="minimap"></div>
+            <div id="player-arrow"></div>
+
+            <div id="orbit-surf" class="orbit-arm">
+                <div class="orbit-arrow"></div>
+                <div class="orbit-label"></div>
+            </div>
+            <div id="orbit-can" class="orbit-arm">
+                <div class="orbit-arrow"></div>
+                <div class="orbit-label"></div>
+            </div>
+            <div id="orbit-mid" class="orbit-arm">
+                <div class="orbit-arrow"></div>
+                <div class="orbit-label"></div>
+            </div>
+            <div id="orbit-high" class="orbit-arm">
+                <div class="orbit-arrow"></div>
+                <div class="orbit-label"></div>
+            </div>
+            <div id="orbit-jet" class="orbit-arm">
+                <div class="orbit-arrow"></div>
+                <div class="orbit-label"></div>
+            </div>
+
+            <!-- Balloon Park direction indicator (rotates around the minimap) -->
+            <div id="park-indicator">
+                <div id="park-indicator-dot"></div>
+            </div>
+        </div>
+    </div>
+
+    <!--
+        Info control (bottom-left)
+        - Small circular "info" button anchored to the bottom-left corner.
+        - Clicking the circle toggles the white info panel above it.
+    -->
+    <button
+        id="info-toggle"
+        class="info-toggle"
+        aria-label="Show Albuquerque Box information"
+        aria-expanded="false"
+        type="button"
+    >
+        i
+    </button>
+
+    <!--
+        Info panel (bottom-left, hidden by default)
+        - Explains wind formations, data source, and how the Box logic works.
+        - Uses a white background and scrollable content.
+    -->
+    <aside id="info-panel" aria-label="Albuquerque Box information">
+        <header class="info-header">
+            <div class="info-title-block">
+                <div class="info-title">About the Albuquerque Box</div>
+                <div class="info-subtitle">What the layers and arrows mean</div>
+            </div>
+        </header>
+        <div id="info-body">
+            <section class="info-section">
+                <h2>What you&rsquo;re seeing</h2>
+                <p>
+                    This is a simplified, educational model of the
+                    <strong>&ldquo;Albuquerque Box&rdquo;</strong> &mdash; a local
+                    wind pattern near Balloon Fiesta Park where winds at different
+                    altitudes blow in different directions. By climbing and
+                    descending, a balloon can roughly trace a loop and return
+                    toward its launch area.
+                </p>
+            </section>
+
+            <section class="info-section">
+                <h2>Wind formations by layer</h2>
+                <ul>
+                    <li>
+                        <strong>Surface (Terrain)</strong> &mdash; Light flow that
+                        follows terrain. In the model it tends to drift south with
+                        a gentle east/west component shaped by hills and valleys.
+                    </li>
+                    <li>
+                        <strong>Canyon (~6k ft)</strong> &mdash; Represents winds
+                        channeling through river and canyon features. Slightly
+                        stronger and often turned a bit more west, especially in a
+                        narrow band north of Balloon Fiesta Park.
+                    </li>
+                    <li>
+                        <strong>Transition (~7k ft)</strong> &mdash; A middle layer
+                        where the flow is starting to turn compared to the
+                        surface. This is where you can feel the shear between
+                        lower and higher winds.
+                    </li>
+                    <li>
+                        <strong>Box Top (~10.5k ft)</strong> &mdash; Stronger winds
+                        aloft with more organized rotation and a northward push.
+                        Together with the surface layer, this helps hint at the
+                        &ldquo;out-and-back&rdquo; motion of the Box.
+                    </li>
+                    <li>
+                        <strong>Jet Stream (~18k ft)</strong> &mdash; A fast,
+                        mostly west–to–east flow. In reality the jet stream lives
+                        much higher and moves, but here it gives you a strong,
+                        clean upper-level push.
+                    </li>
+                </ul>
+            </section>
+
+            <section class="info-section">
+                <h2>Where the data comes from</h2>
+                <ul>
+                    <li>
+                        All winds are <strong>generated in your browser</strong>
+                        from simple math functions. No live weather APIs or
+                        forecast services are called.
+                    </li>
+                    <li>
+                        Each altitude band is stored as a
+                        <strong>2D grid of vectors</strong> (<code>u</code> for
+                        east–west, <code>v</code> for north–south) over the
+                        Albuquerque area.
+                    </li>
+                    <li>
+                        The model is tuned to <strong>feel plausible</strong> for
+                        Box-style flying, not to match current real-world
+                        conditions. It&rsquo;s for exploration, not navigation.
+                    </li>
+                </ul>
+            </section>
+
+            <section class="info-section">
+                <h2>How grid data becomes motion</h2>
+                <ul>
+                    <li>
+                        For each layer, the code samples the grid at the
+                        balloon&rsquo;s longitude/latitude using
+                        <strong>bilinear interpolation</strong> to blend the four
+                        nearest grid points into one smooth wind vector.
+                    </li>
+                    <li>
+                        When the balloon sits between layers (for example between
+                        Canyon and Transition), the simulator
+                        <strong>linearly blends</strong> the lower and upper
+                        vectors based on altitude to produce one combined wind.
+                    </li>
+                    <li>
+                        That vector is applied every frame to the balloon&rsquo;s
+                        position, and the same fields drive:
+                        <ul class="info-sublist">
+                            <li>
+                                The <strong>streaking particles</strong> in the
+                                main view.
+                            </li>
+                            <li>
+                                The <strong>orbit arrows</strong> and
+                                <strong>mph labels</strong> around the minimap.
+                            </li>
+                            <li>
+                                The <strong>colored column</strong> drawn above the
+                                balloon to show which layers you&rsquo;re sampling.
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        Speeds around the minimap are approximated by converting
+                        vector length into an equivalent
+                        <strong>miles-per-hour</strong> value.
+                    </li>
+                </ul>
+            </section>
+
+            <section class="info-section">
+                <h2>Reading the box</h2>
+                <ul>
+                    <li>
+                        <strong>Launch / tap the map</strong> to drop a balloon.
+                        It starts near local terrain height.
+                    </li>
+                    <li>
+                        Use the <strong>BURNER</strong> button or
+                        <strong>spacebar</strong> to climb into different layers
+                        and feel the wind direction change.
+                    </li>
+                    <li>
+                        Watch the <strong>altimeter bar</strong> color and the
+                        <strong>minimap orbit arrows</strong> to understand which
+                        layer you are in and how fast it is moving.
+                    </li>
+                    <li>
+                        Try to fly a <strong>loop</strong>: use low-level flow to
+                        move one way, climb into the opposite-flowing layer, then
+                        descend back toward your starting point.
+                    </li>
+                </ul>
+            </section>
+        </div>
+    </aside>
+
+    <!-- Right-hand control panel -->
+    <div id="controls"  class="collapsed">
+        <!-- Header: title + collapse button -->
+        <div id="controls-header">
+            <div>
+                <div class="controls-title">Albuquerque Box</div>
+                <div class="controls-subtitle">Wind Visualizer and Minigame</div>
+            </div>
+            <button
+                id="controls-toggle"
+                class="icon-button"
+                aria-label="Toggle advanced controls"
+            >
+                ▾
+            </button>
+        </div>
+
+        <!-- Scrollable section: presets, visuals, layers, debug -->
+        <div id="controls-scroll">
+            <!-- Visual options: airspace, 3D buildings, terrain exaggeration -->
+            <div class="layer-group">
+                <span class="section-title">Visuals</span>
+
+                <div class="layer-row">
+                    <div class="layer-left">
+                        <input type="checkbox" id="check-airspace" checked />
+                        <span>Forbidden Airspace Outline</span>
+                    </div>
+                </div>
+
+                <!-- 3D Buildings toggle -->
+                <div class="layer-row">
+                    <div class="layer-left">
+                        <input type="checkbox" id="check-buildings" />
+                        <span>3D Buildings</span>
+                    </div>
+                </div>
+
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>Height Exaggeration</span>
+                        <span id="terrain-val">5.0x</span>
+                    </div>
+                    <input
+                        type="range"
+                        id="terrain-slider"
+                        min="1.0"
+                        max="10.0"
+                        step="0.5"
+                        value="5.0"
+                    />
+                </div>
+            </div>
+
+            <!-- Wind layer toggles + opacity -->
+            <div class="layer-group">
+                <span class="section-title">Wind Layers</span>
+                <div class="layer-row">
+                    <div class="layer-left">
+                        <input type="checkbox" id="check-surface" checked />
+                        <span id="lbl-surface" style="color: #0000ff"
+                            >Surface (Terrain)</span
+                        >
+                    </div>
+                </div>
+                <div class="layer-row">
+                    <div class="layer-left">
+                        <input type="checkbox" id="check-canyon" checked />
+                        <span id="lbl-canyon" style="color: #0088ff"
+                            >Canyon (6k)</span
+                        >
+                    </div>
+                </div>
+                <div class="layer-row">
+                    <div class="layer-left">
+                        <input type="checkbox" id="check-1k" checked />
+                        <span id="lbl-mid" style="color: #ff0000"
+                            >Transition (7k)</span
+                        >
+                    </div>
+                </div>
+                <div class="layer-row">
+                    <div class="layer-left">
+                        <input type="checkbox" id="check-5k" checked />
+                        <span id="lbl-high" style="color: #e6c90c"
+                            >Box Top (10.5k)</span
+                        >
+                    </div>
+                </div>
+                <div class="layer-row">
+                    <div class="layer-left">
+                        <input type="checkbox" id="check-jet" checked />
+                        <span id="lbl-jet" style="color: #0e9c0e"
+                            >Jet Stream (18k)</span
+                        >
+                    </div>
+                </div>
+
+                <!-- Wind opacity slider -->
+                <div class="slider-container" style="margin-top: 6px">
+                    <div class="slider-label">
+                        <span>Wind Overlay Opacity</span>
+                        <span id="wind-opacity-val">60%</span>
+                    </div>
+                    <input
+                        type="range"
+                        id="wind-opacity-slider"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value="0.6"
+                    />
+                </div>
+            </div>
+
+            <!-- Debug camera block -->
+            <div class="layer-group">
+                <span class="section-title">Debug Camera</span>
+                <div id="debug-output">Move map...</div>
+                <button id="btn-copy-cam">Copy Position</button>
+            </div>
+        </div>
+
+        <!-- Footer: pilot controls (visible even when collapsed) -->
+        <div id="controls-footer">
+            <span class="section-title">Presets</span>
+            <div id="presets-container">
+                <button class="preset-btn" id="btn-fiesta">
+                    Balloon Fiesta<br />(1x Height)
+                </button>
+                <button class="preset-btn" id="btn-box">
+                    The Box<br />(6x Height)
+                </button>
+                <button class="preset-btn" id="btn-chase">
+                    Chase Cam<br />(Follow)
+                </button>
+            </div>
+            <span
+                class="section-title"
+                style="color: #00436dff; border: none; margin-bottom: 4px"
+                >Pilot Control</span
+            >
+            <div id="pilot-stats">
+                <span>ALT: <span id="alt-display">4950</span></span>
+                <span>V/S: <span id="vs-display">0</span></span>
+            </div>
+            <div class="slider-container" style="margin-bottom: 12px">
+                <div class="slider-label">
+                    <span>Drag</span>
+                    <span id="drift-val">0.1x</span>
+                </div>
+                <input
+                    type="range"
+                    id="drift-slider"
+                    min="0.0"
+                    max="1.0"
+                    step="0.05"
+                    value="0.1"
+                />
+            </div>
+            <button id="burner-btn">BURNER</button>
+            <p class="instruction">SPACEBAR or TAP &amp; HOLD</p>
+        </div>
+    </div>
+
+    <!-- MapLibre JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.js"></script>
+
+    <!-- App logic -->
+    <script src="app.js"></script>
+</body>
+</html>

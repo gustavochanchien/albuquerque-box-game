@@ -1,0 +1,652 @@
+/* Basic layout */
+
+body,
+html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', sans-serif;
+    background: #222;
+}
+
+/* Map + wind canvas */
+
+#map {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+}
+
+#wind-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* HUD container (top right) */
+
+#hud-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 18px;
+    z-index: 30;
+    pointer-events: none;
+}
+
+/* ------------------------------------------------------------------
+ * Info circle + panel (bottom-left)
+ * ------------------------------------------------------------------ */
+
+/* Small circular button anchored in the bottom-left corner */
+.info-toggle {
+    position: absolute;
+    bottom: 24px;
+    left: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    color: #00436d;
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 40px;
+    text-align: center;
+    cursor: pointer;
+    z-index: 36;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        transform 0.12s ease-out,
+        box-shadow 0.12s ease-out,
+        background 0.12s ease-out,
+        color 0.12s ease-out;
+}
+
+.info-toggle:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+.info-toggle:active {
+    transform: translateY(1px) scale(0.96);
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.4);
+}
+
+/* Optional subtle state when panel is open */
+.info-toggle.open {
+    background: #00436d;
+    color: #ffffff;
+}
+
+/* White info panel that appears above the circle */
+#info-panel {
+    position: absolute;
+    left: 20px;
+    bottom: 72px; /* sits above the circle */
+    width: 320px;
+    max-width: 42vw;
+    max-height: 60vh;
+    display: none; /* hidden until .open is applied */
+    flex-direction: column;
+    background: #ffffff;
+    color: #222222;
+    border-radius: 12px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+    z-index: 35;
+    pointer-events: auto;
+    overflow: hidden;
+}
+
+/* Visible state when toggled */
+#info-panel.open {
+    display: flex;
+}
+
+/* Panel header with subtle blue gradient */
+.info-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px 8px 14px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(
+        135deg,
+        rgba(0, 122, 204, 0.96),
+        rgba(0, 72, 148, 0.96)
+    );
+    color: #ffffff;
+}
+
+.info-title-block {
+    display: flex;
+    flex-direction: column;
+}
+
+.info-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.info-subtitle {
+    font-size: 11px;
+    opacity: 0.9;
+    margin-top: 2px;
+}
+
+/* Scrollable info body */
+#info-body {
+    padding: 10px 14px 12px 14px;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-y: auto;
+    background: #ffffff;
+    color: #222222;
+}
+
+#info-body h2 {
+    font-size: 12px;
+    margin: 8px 0 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #333333;
+}
+
+#info-body p {
+    margin: 4px 0 6px;
+}
+
+#info-body ul {
+    padding-left: 18px;
+    margin: 4px 0 8px;
+}
+
+#info-body li {
+    margin-bottom: 4px;
+}
+
+.info-section + .info-section {
+    margin-top: 8px;
+}
+
+.info-sublist {
+    margin-top: 4px;
+}
+
+/* Slightly tighter typography / panel on smaller screens */
+@media (max-width: 768px) {
+    #info-panel {
+        width: 260px;
+        max-width: 70vw;
+        max-height: 55vh;
+        left: 12px;
+        bottom: 68px;
+    }
+
+    #info-body {
+        font-size: 11px;
+    }
+
+    .info-title {
+        font-size: 12px;
+    }
+
+    .info-toggle {
+        bottom: 18px;
+        left: 16px;
+    }
+}
+
+/* Altimeter */
+
+#altimeter-box {
+    position: relative;
+    width: 44px;
+    height: 260px;
+    background: rgba(15, 15, 20, 0.95);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#alt-gradient {
+    width: 100%;
+    height: 100%;
+    opacity: 0.9;
+    background: linear-gradient(
+        to top,
+        #0011ff 0%,
+        #ff0033 33%,
+        #00ff66 66%,
+        #ffe600 100%
+    );
+}
+
+#alt-needle {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: #fff;
+    border-top: 1px solid rgba(0, 0, 0, 0.6);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.7);
+    transition: bottom 0.08s linear;
+}
+
+#alt-text {
+    position: absolute;
+    bottom: 4px;
+    width: 100%;
+    text-align: center;
+    font-family: monospace;
+    font-size: 11px;
+    font-weight: 800;
+    color: #ffffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+/* Minimap */
+
+#minimap-wrapper {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    border: 4px solid rgba(255, 255, 255, 0.9);
+    background: radial-gradient(circle at 30% 30%, #333 0%, #000 55%, #000 100%);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.7);
+    pointer-events: auto;
+}
+
+#minimap {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    opacity: 0.95;
+}
+
+#player-arrow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 26px;
+    height: 26px;
+    background-color: #ff0000;
+    clip-path: polygon(50% 0%, 0% 100%, 50% 80%, 100% 100%);
+    transform: translate(-50%, -50%);
+    z-index: 40;
+    filter: drop-shadow(0 0 2px white);
+}
+
+/* Orbit arms around minimap (surface/canyon/mid/high/jet) */
+
+.orbit-arm {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 35;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.orbit-arrow {
+    margin-top: 5px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 14px solid white;
+    filter: drop-shadow(0 1px 2px black);
+    transition: border-bottom-color 0.2s;
+}
+
+.orbit-label {
+    position: absolute;
+    top: 25px;
+    font-family: monospace;
+    font-weight: bold;
+    font-size: 10px;
+    color: white;
+    text-shadow: 0 1px 2px black;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+#orbit-surf .orbit-arrow {
+    margin-top: 2px;
+}
+#orbit-surf .orbit-label {
+    top: 20px;
+}
+#orbit-can .orbit-arrow {
+    margin-top: 10px;
+}
+#orbit-can .orbit-label {
+    top: 28px;
+}
+#orbit-mid .orbit-arrow {
+    margin-top: 18px;
+}
+#orbit-mid .orbit-label {
+    top: 36px;
+}
+#orbit-high .orbit-arrow {
+    margin-top: 26px;
+}
+#orbit-high .orbit-label {
+    top: 44px;
+}
+#orbit-jet .orbit-arrow {
+    margin-top: 34px;
+}
+#orbit-jet .orbit-label {
+    top: 52px;
+}
+
+/* Balloon Park direction indicator (rotates around the minimap) */
+
+#park-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 37;
+}
+
+#park-indicator-dot {
+    margin-top: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #00ffff;
+    box-shadow: 0 0 6px rgba(0, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.8);
+}
+
+/* Controls panel (bottom right) */
+
+#controls {
+    position: absolute;
+    bottom: 30px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.96);
+    color: #333;
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    z-index: 20;
+    width: 280px;
+    backdrop-filter: blur(12px);
+    max-height: 65vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 13px;
+}
+
+/* Collapsed state: hide advanced controls, keep pilot footer */
+
+#controls.collapsed {
+    width: 260px;
+    max-height: none;
+}
+
+#controls.collapsed #controls-scroll {
+    display: none;
+}
+
+#controls.collapsed #controls-header {
+    border-bottom: none;
+}
+
+#controls.collapsed #controls-toggle {
+    transform: rotate(180deg);
+}
+
+/* Controls header */
+
+#controls-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px 8px 16px;
+    background: rgba(255, 255, 255, 0.98);
+    border-bottom: 1px solid #e1e1e1;
+    flex-shrink: 0;
+}
+
+.controls-title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.controls-subtitle {
+    font-size: 11px;
+    color: #888;
+    margin-top: 2px;
+}
+
+/* Icon button (collapse) */
+
+.icon-button {
+    border: none;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 999px;
+    width: 26px;
+    height: 26px;
+    font-size: 16px;
+    line-height: 26px;
+    text-align: center;
+    cursor: pointer;
+    color: #555;
+    transition: background 0.15s, transform 0.15s;
+}
+
+.icon-button:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.icon-button:active {
+    transform: scale(0.94);
+}
+
+/* Scrollable controls body */
+
+#controls-scroll {
+    padding: 16px 18px 4px 18px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+/* Footer / pilot control */
+
+#controls-footer {
+    padding: 12px 18px 16px 18px;
+    background: #fafafa;
+    border-top: 1px solid #ddd;
+    flex-shrink: 0;
+}
+
+.section-title {
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #444;
+    margin-bottom: 6px;
+    display: block;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 3px;
+    letter-spacing: 0.06em;
+}
+
+.layer-group {
+    margin-bottom: 14px;
+}
+
+.layer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.layer-left {
+    display: flex;
+    align-items: center;
+}
+
+.layer-left input[type='checkbox'] {
+    margin-right: 8px;
+    accent-color: #00436dff;
+}
+
+.slider-container {
+    margin-bottom: 10px;
+}
+
+.slider-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+input[type='range'] {
+    width: 100%;
+    accent-color: #00436dff;
+    cursor: pointer;
+    height: 4px;
+}
+
+/* Pilot stats / burner */
+
+#pilot-stats {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: bold;
+    color: #222;
+    background: #eee;
+    padding: 6px 8px;
+    border-radius: 6px;
+}
+
+#burner-btn {
+    width: 100%;
+    padding: 18px 0;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #35b6c7ff, #2c72d3ff);
+    color: white;
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(68, 74, 222, 0.35);
+    transition: transform 0.05s, background 0.12s, box-shadow 0.12s;
+}
+
+#burner-btn:active,
+#burner-btn.active {
+    transform: scale(0.96);
+    background: #00436dff;
+    box-shadow: 0 2px 5px rgba(68, 74, 222, 0.35);
+}
+
+.instruction {
+    font-size: 10px;
+    color: #888;
+    margin-top: 6px;
+    text-align: center;
+    margin-bottom: 0;
+}
+
+/* Debug panel */
+
+#debug-output {
+    font-family: 'Consolas', monospace;
+    font-size: 10px;
+    background: #f5f5f5;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    color: #333;
+    margin-bottom: 5px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+}
+
+#btn-copy-cam {
+    width: 100%;
+    font-size: 10px;
+    padding: 5px;
+    cursor: pointer;
+    background: #eee;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+/* Presets */
+
+#presets-container {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.preset-btn {
+    flex: 1;
+    padding: 8px 4px;
+    font-size: 10px;
+    font-weight: bold;
+    background: #f1f1f1;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #333;
+    transition: background 0.1s, box-shadow 0.1s, transform 0.08s;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.preset-btn:hover {
+    background: #e4e4e4;
+}
+
+.preset-btn.active {
+    background: #00436dff;
+    color: white;
+    border-color: #023351ff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+}
