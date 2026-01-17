@@ -426,9 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const p = map.getPitch();
         const b = map.getBearing();
         const z = map.getZoom();
-        const txt = `center: [${c.lng.toFixed(4)}, ${c.lat.toFixed(
-            4
-        )}],
+        const txt = `center: [${c.lng.toFixed(4)}, ${c.lat.toFixed(4)}],
 zoom: ${z.toFixed(2)},
 pitch: ${p.toFixed(0)},
 bearing: ${b.toFixed(0)}`;
@@ -616,6 +614,97 @@ bearing: ${b.toFixed(0)}`;
     /* ------------------------------------------------------------------
      *  Balloon model + HUD sync
      * ------------------------------------------------------------------ */
+
+    // NOTE: fixed version:
+    // - Shadow REMOVED (so it doesn't "fly" with the balloon)
+    // - Anchor fixed so (x,y) is the BOTTOM of the basket
+    function drawHotAirBalloonMarker(ctx, x, y, scale, baseColor, map) {
+        // Camera info (radians)
+        const bearing = (map.getBearing() * Math.PI) / 180;
+        const pitch   = (map.getPitch()   * Math.PI) / 180;
+
+        // Fake “sun” direction: rotate with bearing
+        const lx = Math.cos(bearing + Math.PI * 0.65);
+        const ly = Math.sin(bearing + Math.PI * 0.65);
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        // Subtle perspective squash as pitch increases
+        const squash = 1 - 0.12 * Math.sin(pitch);
+        ctx.scale(1, squash);
+
+        const w = 10 * scale;
+        const h = 14 * scale;
+
+        // Basket dims (used for anchoring)
+        const bw = 7 * scale;
+        const bh = 5 * scale;
+        const by = h * 0.95;
+
+        // ✅ Anchor so (x,y) is the bottom of the basket
+        // (i.e., draw everything ABOVE the point)
+        ctx.translate(0, -(by + bh));
+
+        // --- Balloon body shape ---
+        ctx.beginPath();
+        ctx.moveTo(0, -h);
+        ctx.bezierCurveTo(w, -h, w, -h * 0.1, 0, h * 0.55);
+        ctx.bezierCurveTo(-w, -h * 0.1, -w, -h, 0, -h);
+        ctx.closePath();
+
+        // Camera-reactive “3D” shading:
+        // shift highlight opposite the light direction so it changes as you rotate
+        const hx = -lx * w * 0.55;
+        const hy = -ly * h * 0.40;
+
+        const grad = ctx.createRadialGradient(hx, hy, 1, 0, 0, w * 1.9);
+        grad.addColorStop(0.00, "rgba(255,255,255,0.95)");
+        grad.addColorStop(0.22, baseColor);
+        grad.addColorStop(0.75, "rgba(0,0,0,0.25)");
+        grad.addColorStop(1.00, "rgba(0,0,0,0.60)");
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Specular “shine” streak that rotates with light
+        ctx.save();
+        ctx.globalAlpha = 0.22;
+        ctx.rotate(Math.atan2(ly, lx) + Math.PI * 0.5);
+        const shine = ctx.createLinearGradient(0, -h, 0, h * 0.6);
+        shine.addColorStop(0.0,  "rgba(255,255,255,0.0)");
+        shine.addColorStop(0.25, "rgba(255,255,255,0.55)");
+        shine.addColorStop(0.55, "rgba(255,255,255,0.0)");
+        ctx.fillStyle = shine;
+        ctx.beginPath();
+        ctx.ellipse(0, -h * 0.1, w * 0.22, h * 0.75, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // --- Ropes ---
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(0,0,0,0.45)";
+        ctx.lineWidth = 1.0 * scale;
+        ctx.moveTo(-w * 0.35, h * 0.52);
+        ctx.lineTo(-w * 0.25, h * 0.95);
+        ctx.moveTo(w * 0.35, h * 0.52);
+        ctx.lineTo(w * 0.25, h * 0.95);
+        ctx.stroke();
+
+        // --- Basket ---
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-bw / 2, by, bw, bh, 1.2 * scale);
+        else ctx.rect(-bw / 2, by, bw, bh);
+
+        // Basket shading responds to light too
+        const bx = -lx * bw * 0.35;
+        const basketGrad = ctx.createLinearGradient(bx, by, -bx, by + bh);
+        basketGrad.addColorStop(0, "rgba(230,165,90,0.95)");
+        basketGrad.addColorStop(1, "rgba(90,50,25,0.95)");
+        ctx.fillStyle = basketGrad;
+        ctx.fill();
+
+        ctx.restore();
+    }
 
     class PlayerBalloon {
         constructor() {
@@ -865,13 +954,8 @@ bearing: ${b.toFixed(0)}`;
 
             if (p3d_air.inFront) {
                 const color = getColorForAltitude(this.alt);
-                ctx.beginPath();
-                ctx.fillStyle = color;
-                ctx.arc(p3d_air.x, p3d_air.y, 8, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
+                // scale tweak: 2.0 is what you had; adjust to taste
+                drawHotAirBalloonMarker(ctx, p3d_air.x, p3d_air.y, 2.0, color, map);
             }
 
             this.lastDriftX = driftX;

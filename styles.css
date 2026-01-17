@@ -228,12 +228,26 @@ html {
     opacity: 0.9;
     background: linear-gradient(
         to top,
-        #0011ff 0%,
-        #ff0033 33%,
-        #00ff66 66%,
-        #ffe600 100%
+        /* bottom of bar (minH = 4500) */
+        #0000ff 0%,
+
+        /* canyon @ 6000 */
+        #2bf8ff 9.68%,
+
+        /* mid @ 7500 */
+        #ff0000 19.35%,
+
+        /* high @ 10500 */
+        #ffff00 38.71%,
+
+        /* jet @ 18000 */
+        #00ff00 87.10%,
+
+        /* top of bar (maxH = 20000) */
+        #00ff00 100%
     );
 }
+
 
 #alt-needle {
     position: absolute;
