@@ -10,16 +10,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const CONFIG = {
         trailFade: 0.09,         // How quickly old wind streaks fade when idle
         moveFade: 0.9,           // Faster fade while user is moving the camera
-        particleCount: 10000,    // Total particles across all wind layers
+        particleCount: 25000,    // Total particles across all wind layers
         simSpeed: 0.3,           // Particle simulation step factor
         lineWidth: 3.5,          // Particle stroke width
         windOpacity: 0.8,        // Global alpha for wind visuals (slider driven)
         colors: {
-            surface: '#0000ff',
-            canyon:  '#2bf8ff',
-            mid:     '#ff0000',
-            high:    '#ffff00',
-            jet:     '#00ff00',
+            surface: '#ff0000',
+            canyon:  '#ffff00',
+            mid:     '#00ff00',
+            high:    '#00ffff',
+            jet:     '#00008b',
         },
     };
 
@@ -360,6 +360,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 'space-color': '#000000',
                 'horizon-blend': 0.1,
             },
+            light: {
+                anchor: 'viewport',
+                color: '#ffe8c4',
+                intensity: 0.35,
+                position: [1.5, 210, 30],
+            },
         },
         center: [-106.587, 35.163], // Balloon Fiesta area (default view)
         zoom: 13.49,
@@ -448,7 +454,7 @@ bearing: ${b.toFixed(0)}`;
         ]);
     }
 
-    // Central place to change terrain exaggeration
+    // Central place to change exaggeration.
     function setExaggeration(val) {
         currentExaggeration = val;
         document.getElementById('terrain-slider').value = val;
@@ -507,8 +513,20 @@ bearing: ${b.toFixed(0)}`;
                 'source-layer': 'buildings',
                 minzoom: 14,
                 paint: {
-                    'fill-extrusion-color': '#d8d8d8',
-                    'fill-extrusion-opacity': 0.9,
+                    // Vary color by a hash of feature id for realistic variation
+                    'fill-extrusion-color': [
+                        'interpolate',
+                        ['linear'],
+                        ['%', ['to-number', ['id'], 0], 7],
+                        0, '#c4b9a8',  // warm sandstone
+                        1, '#b8aea0',  // light taupe
+                        2, '#d1c7b7',  // cream
+                        3, '#a89f93',  // warm gray
+                        4, '#c9bfb0',  // beige
+                        5, '#b5a999',  // muted tan
+                        6, '#bfb5a5',  // sand
+                    ],
+                    'fill-extrusion-opacity': 0.92,
                     'fill-extrusion-height': [
                         'interpolate',
                         ['linear'],
@@ -519,6 +537,7 @@ bearing: ${b.toFixed(0)}`;
                         BASE_BUILDING_HEIGHT_M,
                     ],
                     'fill-extrusion-base': 0,
+                    'fill-extrusion-vertical-gradient': true,
                 },
             },
             'airspace-outline'
@@ -615,93 +634,206 @@ bearing: ${b.toFixed(0)}`;
      *  Balloon model + HUD sync
      * ------------------------------------------------------------------ */
 
-    // NOTE: fixed version:
-    // - Shadow REMOVED (so it doesn't "fly" with the balloon)
-    // - Anchor fixed so (x,y) is the BOTTOM of the basket
+    // Enhanced hot-air balloon marker with gore panels, skirt, detailed rigging & basket
     function drawHotAirBalloonMarker(ctx, x, y, scale, baseColor, map) {
-        // Camera info (radians)
         const bearing = (map.getBearing() * Math.PI) / 180;
         const pitch   = (map.getPitch()   * Math.PI) / 180;
 
-        // Fake “sun” direction: rotate with bearing
+        // Fake "sun" direction: rotate with bearing
         const lx = Math.cos(bearing + Math.PI * 0.65);
         const ly = Math.sin(bearing + Math.PI * 0.65);
 
         ctx.save();
         ctx.translate(x, y);
 
-        // Subtle perspective squash as pitch increases
         const squash = 1 - 0.12 * Math.sin(pitch);
         ctx.scale(1, squash);
 
-        const w = 10 * scale;
-        const h = 14 * scale;
+        const w = 11 * scale;
+        const h = 15 * scale;
 
-        // Basket dims (used for anchoring)
+        // Basket dims
         const bw = 7 * scale;
         const bh = 5 * scale;
         const by = h * 0.95;
 
-        // ✅ Anchor so (x,y) is the bottom of the basket
-        // (i.e., draw everything ABOVE the point)
+        // Anchor so (x,y) is the bottom of the basket
         ctx.translate(0, -(by + bh));
 
-        // --- Balloon body shape ---
-        ctx.beginPath();
-        ctx.moveTo(0, -h);
-        ctx.bezierCurveTo(w, -h, w, -h * 0.1, 0, h * 0.55);
-        ctx.bezierCurveTo(-w, -h * 0.1, -w, -h, 0, -h);
-        ctx.closePath();
+        // --- Helper: envelope clipping path ---
+        function envelopePath() {
+            ctx.beginPath();
+            ctx.moveTo(0, -h);
+            ctx.bezierCurveTo(w * 1.05, -h, w * 1.05, -h * 0.05, 0, h * 0.55);
+            ctx.bezierCurveTo(-w * 1.05, -h * 0.05, -w * 1.05, -h, 0, -h);
+            ctx.closePath();
+        }
 
-        // Camera-reactive “3D” shading:
-        // shift highlight opposite the light direction so it changes as you rotate
+        // --- Envelope base fill with 3D shading ---
+        envelopePath();
         const hx = -lx * w * 0.55;
         const hy = -ly * h * 0.40;
-
         const grad = ctx.createRadialGradient(hx, hy, 1, 0, 0, w * 1.9);
-        grad.addColorStop(0.00, "rgba(255,255,255,0.95)");
-        grad.addColorStop(0.22, baseColor);
-        grad.addColorStop(0.75, "rgba(0,0,0,0.25)");
-        grad.addColorStop(1.00, "rgba(0,0,0,0.60)");
+        grad.addColorStop(0.00, "rgba(255,255,255,1.0)");
+        grad.addColorStop(0.20, baseColor);
+        grad.addColorStop(0.70, "rgba(0,0,0,0.35)");
+        grad.addColorStop(1.00, "rgba(0,0,0,0.70)");
         ctx.fillStyle = grad;
         ctx.fill();
 
-        // Specular “shine” streak that rotates with light
+        // --- Horizontal gore bands (alternating light/dark stripes) ---
         ctx.save();
-        ctx.globalAlpha = 0.22;
+        envelopePath();
+        ctx.clip();
+        const bandCount = 6;
+        const bandH = (h + h * 0.55) / bandCount;
+        for (let i = 0; i < bandCount; i++) {
+            const bandY = -h + i * bandH;
+            // Alternate: even bands get a white tint, odd bands get a darker tint
+            ctx.fillStyle = i % 2 === 0
+                ? "rgba(255,255,255,0.18)"
+                : "rgba(0,0,0,0.15)";
+            ctx.fillRect(-w * 1.1, bandY, w * 2.2, bandH);
+        }
+
+        // --- Vertical gore seam lines ---
+        const goreCount = 8;
+        ctx.strokeStyle = "rgba(0,0,0,0.20)";
+        ctx.lineWidth = 0.5 * scale;
+        for (let g = 0; g < goreCount; g++) {
+            const frac = g / goreCount;
+            const angle = frac * Math.PI * 2;
+            // Project gore seam as a vertical line with sinusoidal x-offset
+            const goreX = Math.sin(angle + bearing) * w * 0.95;
+            ctx.beginPath();
+            ctx.moveTo(goreX * 0.15, -h * 0.95);
+            ctx.quadraticCurveTo(goreX, -h * 0.15, goreX * 0.3, h * 0.50);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // --- Specular shine streak that rotates with light ---
+        ctx.save();
+        ctx.globalAlpha = 0.25;
+        envelopePath();
+        ctx.clip();
         ctx.rotate(Math.atan2(ly, lx) + Math.PI * 0.5);
         const shine = ctx.createLinearGradient(0, -h, 0, h * 0.6);
         shine.addColorStop(0.0,  "rgba(255,255,255,0.0)");
-        shine.addColorStop(0.25, "rgba(255,255,255,0.55)");
-        shine.addColorStop(0.55, "rgba(255,255,255,0.0)");
+        shine.addColorStop(0.20, "rgba(255,255,255,0.6)");
+        shine.addColorStop(0.50, "rgba(255,255,255,0.0)");
         ctx.fillStyle = shine;
         ctx.beginPath();
-        ctx.ellipse(0, -h * 0.1, w * 0.22, h * 0.75, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, -h * 0.15, w * 0.28, h * 0.80, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
-        // --- Ropes ---
-        ctx.beginPath();
+        // --- Envelope outline ---
+        envelopePath();
         ctx.strokeStyle = "rgba(0,0,0,0.45)";
         ctx.lineWidth = 1.0 * scale;
-        ctx.moveTo(-w * 0.35, h * 0.52);
-        ctx.lineTo(-w * 0.25, h * 0.95);
-        ctx.moveTo(w * 0.35, h * 0.52);
-        ctx.lineTo(w * 0.25, h * 0.95);
+        ctx.stroke();
+
+        // --- Crown (top circle highlight) ---
+        ctx.beginPath();
+        ctx.arc(0, -h * 0.92, w * 0.18, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,0.40)";
+        ctx.fill();
+
+        // --- Skirt / throat ---
+        const skirtW = w * 0.35;
+        const skirtH = h * 0.12;
+        const skirtY = h * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(-skirtW, skirtY);
+        ctx.quadraticCurveTo(-skirtW * 1.15, skirtY + skirtH, 0, skirtY + skirtH * 0.8);
+        ctx.quadraticCurveTo(skirtW * 1.15, skirtY + skirtH, skirtW, skirtY);
+        ctx.closePath();
+        const skirtGrad = ctx.createLinearGradient(0, skirtY, 0, skirtY + skirtH);
+        skirtGrad.addColorStop(0, "rgba(80,40,20,0.9)");
+        skirtGrad.addColorStop(1, "rgba(30,15,5,1.0)");
+        ctx.fillStyle = skirtGrad;
+        ctx.fill();
+
+        // --- Burner glow (subtle orange glow inside the throat) ---
+        ctx.beginPath();
+        ctx.arc(0, skirtY + skirtH * 0.3, skirtW * 0.4, 0, Math.PI * 2);
+        const burnerGlow = ctx.createRadialGradient(0, skirtY + skirtH * 0.3, 0, 0, skirtY + skirtH * 0.3, skirtW * 0.5);
+        burnerGlow.addColorStop(0, "rgba(255,160,40,0.50)");
+        burnerGlow.addColorStop(1, "rgba(255,100,0,0.0)");
+        ctx.fillStyle = burnerGlow;
+        ctx.fill();
+
+        // --- Rigging cables (4 lines converging to basket corners) ---
+        ctx.strokeStyle = "rgba(60,40,20,0.75)";
+        ctx.lineWidth = 0.7 * scale;
+        const ropeAttachY = h * 0.53;
+        const ropeSpreadX = w * 0.42;
+        const basketCornerX = bw * 0.42;
+        // Left pair
+        ctx.beginPath();
+        ctx.moveTo(-ropeSpreadX, ropeAttachY);
+        ctx.lineTo(-basketCornerX, by);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-ropeSpreadX * 0.5, ropeAttachY + 1);
+        ctx.lineTo(-basketCornerX, by);
+        ctx.stroke();
+        // Right pair
+        ctx.beginPath();
+        ctx.moveTo(ropeSpreadX, ropeAttachY);
+        ctx.lineTo(basketCornerX, by);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ropeSpreadX * 0.5, ropeAttachY + 1);
+        ctx.lineTo(basketCornerX, by);
         ctx.stroke();
 
         // --- Basket ---
         ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(-bw / 2, by, bw, bh, 1.2 * scale);
+        if (ctx.roundRect) ctx.roundRect(-bw / 2, by, bw, bh, 1.5 * scale);
         else ctx.rect(-bw / 2, by, bw, bh);
 
-        // Basket shading responds to light too
         const bx = -lx * bw * 0.35;
         const basketGrad = ctx.createLinearGradient(bx, by, -bx, by + bh);
-        basketGrad.addColorStop(0, "rgba(230,165,90,0.95)");
-        basketGrad.addColorStop(1, "rgba(90,50,25,0.95)");
+        basketGrad.addColorStop(0, "rgba(210,155,80,1.0)");
+        basketGrad.addColorStop(0.5, "rgba(170,110,50,1.0)");
+        basketGrad.addColorStop(1, "rgba(85,45,20,1.0)");
         ctx.fillStyle = basketGrad;
         ctx.fill();
+
+        // Basket weave texture (horizontal lines)
+        ctx.save();
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-bw / 2, by, bw, bh, 1.5 * scale);
+        else ctx.rect(-bw / 2, by, bw, bh);
+        ctx.clip();
+        ctx.strokeStyle = "rgba(0,0,0,0.20)";
+        ctx.lineWidth = 0.5 * scale;
+        const weaveGap = 1.8 * scale;
+        for (let wy = by + weaveGap; wy < by + bh; wy += weaveGap) {
+            ctx.beginPath();
+            ctx.moveTo(-bw / 2, wy);
+            ctx.lineTo(bw / 2, wy);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // Basket rim (top edge)
+        ctx.beginPath();
+        ctx.moveTo(-bw / 2, by);
+        ctx.lineTo(bw / 2, by);
+        ctx.strokeStyle = "rgba(120,70,30,1.0)";
+        ctx.lineWidth = 1.2 * scale;
+        ctx.stroke();
+
+        // Basket outline
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-bw / 2, by, bw, bh, 1.5 * scale);
+        else ctx.rect(-bw / 2, by, bw, bh);
+        ctx.strokeStyle = "rgba(60,30,10,0.7)";
+        ctx.lineWidth = 0.6 * scale;
+        ctx.stroke();
 
         ctx.restore();
     }
@@ -743,9 +875,9 @@ bearing: ${b.toFixed(0)}`;
             const elevM = map.queryTerrainElevation([this.lng, this.lat]);
             if (elevM !== null) this.groundAlt = elevM * 3.28084;
 
-            const GRAVITY = -15;
+            const GRAVITY = -6;
             const LIFT = 50;
-            const DRAG = 0.95;
+            const DRAG = 0.98;
 
             if (burnerOn) this.verticalSpeed += LIFT * 0.1;
             this.verticalSpeed += GRAVITY * 0.1;
@@ -882,6 +1014,17 @@ bearing: ${b.toFixed(0)}`;
                 const mph = Math.round(mag * 46000);
                 const label = el.querySelector('.orbit-label');
                 if (label) label.innerText = mph + 'mph';
+
+                // Scale triangle size based on wind strength
+                const arrow = el.querySelector('.orbit-arrow');
+                if (arrow) {
+                    const scale = 0.5 + Math.min(mag * 600, 1.5);
+                    const sideSize = Math.round(6 * scale);
+                    const bottomSize = Math.round(14 * scale);
+                    arrow.style.borderLeftWidth = sideSize + 'px';
+                    arrow.style.borderRightWidth = sideSize + 'px';
+                    arrow.style.borderBottomWidth = bottomSize + 'px';
+                }
             });
 
             // Balloon Fiesta Park indicator on minimap
@@ -895,24 +1038,30 @@ bearing: ${b.toFixed(0)}`;
             }
         }
 
-        // Draw balloon vertical column and cap in wind canvas
-        draw(ctx) {
+        // Compute drift correction (shared by column and icon draws)
+        _updateDrift() {
             if (!this.active) return;
-
-            const TOP_ALT = 20000;
-            const SEGMENTS = 64;
-            const step = (TOP_ALT - this.groundAlt) / SEGMENTS;
-            ctx.lineWidth = 2.5;
-
-            // Align 3D projection with map.project on the ground point
             const groundScreen = map.project([this.lng, this.lat]);
             const groundMath = project3D(
                 this.lng,
                 this.lat,
                 this.groundAlt * 0.3048
             );
-            const driftX = groundScreen.x - groundMath.x;
-            const driftY = groundScreen.y - groundMath.y;
+            this.lastDriftX = groundScreen.x - groundMath.x;
+            this.lastDriftY = groundScreen.y - groundMath.y;
+        }
+
+        // Draw the vertical altitude column (rendered beneath particles)
+        drawColumn(ctx) {
+            if (!this.active) return;
+            this._updateDrift();
+            const driftX = this.lastDriftX;
+            const driftY = this.lastDriftY;
+
+            const TOP_ALT = 20000;
+            const SEGMENTS = 64;
+            const step = (TOP_ALT - this.groundAlt) / SEGMENTS;
+            ctx.lineWidth = 2.5;
 
             for (let i = 0; i < SEGMENTS; i++) {
                 const alt1 = this.groundAlt + i * step;
@@ -943,6 +1092,13 @@ bearing: ${b.toFixed(0)}`;
                     ctx.stroke();
                 }
             }
+        }
+
+        // Draw the balloon icon (rendered above particles)
+        drawIcon(ctx) {
+            if (!this.active) return;
+            const driftX = this.lastDriftX;
+            const driftY = this.lastDriftY;
 
             let p3d_air = project3D(
                 this.lng,
@@ -954,16 +1110,112 @@ bearing: ${b.toFixed(0)}`;
 
             if (p3d_air.inFront) {
                 const color = getColorForAltitude(this.alt);
-                // scale tweak: 2.0 is what you had; adjust to taste
                 drawHotAirBalloonMarker(ctx, p3d_air.x, p3d_air.y, 2.0, color, map);
             }
+        }
 
-            this.lastDriftX = driftX;
-            this.lastDriftY = driftY;
+        // Draw both column and icon (legacy convenience)
+        draw(ctx) {
+            this.drawColumn(ctx);
+            this.drawIcon(ctx);
         }
     }
 
     const player = new PlayerBalloon();
+
+    /* ------------------------------------------------------------------
+     *  Dawn Patrol: decorative NPC balloons (one per layer)
+     * ------------------------------------------------------------------ */
+
+    const DAWN_COLORS = ['#e63946', '#f4a261', '#2a9d8f', '#7209b7', '#4361ee'];
+
+    class DawnBalloon {
+        constructor(targetAltFeet, color) {
+            this.active = false;
+            this.lng = 0;
+            this.lat = 0;
+            this.alt = 0;
+            this.groundAlt = 0;
+            this.targetAlt = targetAltFeet;
+            this.color = color;
+            this.trail = [];       // screen-space trail for fading line
+            this.rising = true;
+        }
+
+        spawn(lng, lat) {
+            this.active = true;
+            this.lng = lng;
+            this.lat = lat;
+            const elevM = map.queryTerrainElevation([lng, lat]) || 1500;
+            this.groundAlt = elevM * 3.28084;
+            this.alt = this.groundAlt;
+            this.rising = true;
+            this.trail = [];
+        }
+
+        update() {
+            if (!this.active) return;
+
+            // Slowly rise toward target altitude
+            if (this.rising) {
+                const RISE_RATE = 4.0; // feet per frame
+                this.alt += RISE_RATE;
+                if (this.alt >= this.targetAlt) {
+                    this.alt = this.targetAlt;
+                    this.rising = false;
+                }
+            }
+
+            // Drift with wind at current altitude
+            const wind = getWindAtAltitude(this.lng, this.lat, this.alt);
+            this.lng += wind.u * balloonSpeed * 1.0;
+            this.lat += wind.v * balloonSpeed * 1.0;
+
+            // Despawn if outside simulation bounds
+            if (
+                this.lng < BOUNDS[0] || this.lng > BOUNDS[2] ||
+                this.lat < BOUNDS[1] || this.lat > BOUNDS[3]
+            ) {
+                this.active = false;
+                return;
+            }
+
+            // Record trail point (in geo coords + alt for 3D projection)
+            this.trail.push({ lng: this.lng, lat: this.lat, alt: this.alt });
+            if (this.trail.length > 60) this.trail.shift();
+        }
+
+        draw(ctx) {
+            if (!this.active) return;
+
+            // Draw trail
+            if (this.trail.length > 1) {
+                for (let i = 1; i < this.trail.length; i++) {
+                    const p0 = project3D(this.trail[i - 1].lng, this.trail[i - 1].lat, this.trail[i - 1].alt * 0.3048);
+                    const p1 = project3D(this.trail[i].lng, this.trail[i].lat, this.trail[i].alt * 0.3048);
+                    if (p0.inFront && p1.inFront) {
+                        const alpha = (i / this.trail.length) * 0.5;
+                        ctx.beginPath();
+                        ctx.strokeStyle = this.color;
+                        ctx.globalAlpha = alpha;
+                        ctx.lineWidth = 2;
+                        ctx.moveTo(p0.x, p0.y);
+                        ctx.lineTo(p1.x, p1.y);
+                        ctx.stroke();
+                    }
+                }
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Draw balloon icon
+            const p = project3D(this.lng, this.lat, this.alt * 0.3048);
+            if (p.inFront) {
+                drawHotAirBalloonMarker(ctx, p.x, p.y, 1.8, this.color, map);
+            }
+        }
+    }
+
+    let dawnBalloons = [];
 
     /* ------------------------------------------------------------------
      *  Wind canvas + particles
@@ -972,6 +1224,15 @@ bearing: ${b.toFixed(0)}`;
     const canvas = document.getElementById('wind-canvas');
     const ctx = canvas.getContext('2d');
     ctx.lineCap = 'round';
+
+    // Per-layer offscreen canvases so altitude levels never bleed into each other
+    const layerCanvases = {};
+    for (const key of Object.keys(LAYER_CONFIG)) {
+        const c = document.createElement('canvas');
+        const lctx = c.getContext('2d');
+        lctx.lineCap = 'round';
+        layerCanvases[key] = { canvas: c, ctx: lctx };
+    }
 
     // 3D maplibre projection into canvas space
     function project3D(lng, lat, altitudeMeters) {
@@ -1011,7 +1272,7 @@ bearing: ${b.toFixed(0)}`;
 
     let particles = [];
 
-    // Simple screen-space advected particle
+    // Simple screen-space advected particle (batched circle rendering)
     class Particle {
         constructor(type, altitude) {
             this.type = type;
@@ -1028,12 +1289,16 @@ bearing: ${b.toFixed(0)}`;
             this.age = Math.random() * 100;
             this.life = 100 + Math.random() * 100;
             this.prev = null;
+            this.drawX = 0;
+            this.drawY = 0;
+            this.drawAlpha = 0;
+            this.visible = false;
         }
         update() {
+            this.visible = false;
             const config = LAYER_CONFIG[this.type];
             let endPos;
 
-            // Surface particles use 2D map projection to "stick" to surface mesh
             if (this.type === 'surface') {
                 const pt = map.project([this.lng, this.lat]);
                 endPos = { x: pt.x, y: pt.y, inFront: true };
@@ -1068,7 +1333,6 @@ bearing: ${b.toFixed(0)}`;
                     endPos.y - this.prev.y
                 );
 
-                // Cull big teleports / projection flips
                 if (dist < 80 && verticalJump < 10) {
                     let alpha = 1.0;
                     if (this.age < 20) alpha = this.age / 20;
@@ -1077,14 +1341,10 @@ bearing: ${b.toFixed(0)}`;
                     alpha *= CONFIG.windOpacity;
 
                     if (alpha > 0) {
-                        ctx.beginPath();
-                        ctx.strokeStyle = config.color;
-                        ctx.lineWidth = CONFIG.lineWidth;
-                        ctx.globalAlpha = alpha;
-                        ctx.moveTo(this.prev.x, this.prev.y);
-                        ctx.lineTo(endPos.x, endPos.y);
-                        ctx.stroke();
-                        ctx.globalAlpha = 1.0;
+                        this.drawX = endPos.x;
+                        this.drawY = endPos.y;
+                        this.drawAlpha = alpha;
+                        this.visible = true;
                     }
                 }
             }
@@ -1094,9 +1354,85 @@ bearing: ${b.toFixed(0)}`;
         }
     }
 
+    // Batch-draw all visible particles grouped by layer color.
+    // Each layer draws onto its own offscreen canvas (with independent fade),
+    // then the offscreen canvases are composited onto the main canvas in
+    // ascending altitude order so higher layers always appear on top.
+    function drawParticlesBatched() {
+        const RADIUS = CONFIG.lineWidth * 0.5;
+        const ALPHA_BUCKETS = 5; // quantize alpha to reduce state changes
+        const TAU = Math.PI * 2;
+        const fade = isMoving ? CONFIG.moveFade : CONFIG.trailFade;
+
+        // Group particles by type
+        const groups = {};
+        for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            if (!p.visible) continue;
+            if (!groups[p.type]) groups[p.type] = [];
+            groups[p.type].push(p);
+        }
+
+        // Draw each layer onto its own offscreen canvas
+        for (let li = 0; li < sortedLayers.length; li++) {
+            const type = sortedLayers[li].type;
+            const lc = layerCanvases[type];
+            const lctx = lc.ctx;
+
+            // Fade this layer's trails independently
+            lctx.globalCompositeOperation = 'destination-out';
+            lctx.fillStyle = `rgba(10,10,10,${fade})`;
+            lctx.fillRect(0, 0, lc.canvas.width, lc.canvas.height);
+            lctx.globalCompositeOperation = 'source-over';
+
+            if (!groups[type]) continue;
+            const config = LAYER_CONFIG[type];
+            lctx.fillStyle = config.color;
+
+            // Sort into alpha buckets
+            const buckets = new Array(ALPHA_BUCKETS);
+            for (let b = 0; b < ALPHA_BUCKETS; b++) buckets[b] = [];
+
+            const group = groups[type];
+            for (let i = 0; i < group.length; i++) {
+                const p = group[i];
+                const bucket = Math.min(
+                    ALPHA_BUCKETS - 1,
+                    Math.floor(p.drawAlpha * ALPHA_BUCKETS)
+                );
+                buckets[bucket].push(p);
+            }
+
+            for (let b = 0; b < ALPHA_BUCKETS; b++) {
+                if (buckets[b].length === 0) continue;
+                const alphaVal = (b + 0.5) / ALPHA_BUCKETS;
+                lctx.globalAlpha = alphaVal;
+                lctx.beginPath();
+                for (let i = 0; i < buckets[b].length; i++) {
+                    const p = buckets[b][i];
+                    lctx.moveTo(p.drawX + RADIUS, p.drawY);
+                    lctx.arc(p.drawX, p.drawY, RADIUS, 0, TAU);
+                }
+                lctx.fill();
+            }
+            lctx.globalAlpha = 1.0;
+        }
+
+        // Composite layer canvases onto main canvas in altitude order
+        for (let li = 0; li < sortedLayers.length; li++) {
+            const type = sortedLayers[li].type;
+            if (!LAYER_CONFIG[type].active) continue;
+            ctx.drawImage(layerCanvases[type].canvas, 0, 0);
+        }
+    }
+
     function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+        for (const key of Object.keys(layerCanvases)) {
+            layerCanvases[key].canvas.width = window.innerWidth;
+            layerCanvases[key].canvas.height = window.innerHeight;
+        }
     }
 
     function updateParticlePools() {
@@ -1116,7 +1452,7 @@ bearing: ${b.toFixed(0)}`;
                 }
             }
         });
-        // Draw in ascending altitude (surface on top of higher layers visually)
+        // Draw in ascending altitude so higher layers render on top
         particles.sort((a, b) => a.altitude - b.altitude);
     }
 
@@ -1167,11 +1503,13 @@ bearing: ${b.toFixed(0)}`;
 
         // Altitude for projection
         let drawAlt = layer.altitude * 0.3048;
+        const groundM =
+            map.queryTerrainElevation([player.lng, player.lat]) || 0;
         if (layer.type === 'surface') {
-            const groundM =
-                map.queryTerrainElevation([player.lng, player.lat]) ||
-                0;
             drawAlt = groundM + 200; // a bit above terrain to avoid clipping
+        } else if (layer.type === 'canyon') {
+            // Pin yellow canyon triangle to stay above the mountain top
+            drawAlt = Math.max(drawAlt, groundM + 250);
         }
 
         const pTip   = project3D(tLng, tLat, drawAlt);
@@ -1190,8 +1528,7 @@ bearing: ${b.toFixed(0)}`;
             ctx.closePath();
 
             ctx.fillStyle = layer.color;
-            let alpha = isMoving ? 0.5 : 0.1;
-            alpha *= CONFIG.windOpacity;
+            let alpha = CONFIG.windOpacity;
             if (alpha > 0) {
                 ctx.globalAlpha = alpha;
                 ctx.fill();
@@ -1217,25 +1554,35 @@ bearing: ${b.toFixed(0)}`;
             });
         }
 
-        // Fade old streaks
-        ctx.globalCompositeOperation = 'destination-out';
-        const fade = isMoving ? CONFIG.moveFade : CONFIG.trailFade;
-        ctx.fillStyle = `rgba(10,10,10,${fade})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.globalCompositeOperation = 'source-over';
+        // Clear main canvas each frame (particles live on per-layer canvases)
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Update balloon physics + render vertical column
+        // Update balloon physics
         player.update(burnerActive);
-        player.draw(ctx);
 
-        // Draw layer direction triangles
+        // Draw column + layer triangles (beneath particles)
+        player.drawColumn(ctx);
         sortedLayers.forEach(layer => {
             if (layer.active) drawLayerTriangle(layer);
         });
 
-        // Update particles
+        // Update particles then composite per-layer canvases
         if (particles.length > 0) {
-            particles.forEach(p => p.update());
+            for (let i = 0; i < particles.length; i++) particles[i].update();
+        }
+        drawParticlesBatched();
+
+        // Draw balloon icon on top of everything
+        player.drawIcon(ctx);
+
+        // Dawn Patrol balloons: update + draw on top of everything
+        for (let i = dawnBalloons.length - 1; i >= 0; i--) {
+            dawnBalloons[i].update();
+            if (!dawnBalloons[i].active) {
+                dawnBalloons.splice(i, 1);
+                continue;
+            }
+            dawnBalloons[i].draw(ctx);
         }
 
         if (!isMoving) map.triggerRepaint();
@@ -1256,13 +1603,22 @@ bearing: ${b.toFixed(0)}`;
      * ------------------------------------------------------------------ */
 
     const btnFiesta = document.getElementById('btn-fiesta');
-    const btnBox    = document.getElementById('btn-box');
     const btnChase  = document.getElementById('btn-chase');
+    const btnDawn   = document.getElementById('btn-dawn');
+    const btnSpread = document.getElementById('btn-spread');
+
+    // Original altitudes for toggling back from spread mode
+    const ORIGINAL_ALTITUDES = {};
+    for (const key of Object.keys(LAYER_CONFIG)) {
+        ORIGINAL_ALTITUDES[key] = LAYER_CONFIG[key].altitude;
+    }
+    let layersSpread = false;
 
     function clearPresetActive() {
         btnFiesta.classList.remove('active');
-        btnBox.classList.remove('active');
         btnChase.classList.remove('active');
+        btnDawn.classList.remove('active');
+        btnSpread.classList.remove('active');
     }
 
     // Fiesta preset: 1x exaggeration over launch field
@@ -1276,21 +1632,6 @@ bearing: ${b.toFixed(0)}`;
             zoom: 13.49,
             pitch: 76,
             bearing: 0,
-            speed: 0.8,
-        });
-    });
-
-    // "The Box" preset: 6x exaggeration, box view north
-    btnBox.addEventListener('click', () => {
-        isChasing = false;
-        clearPresetActive();
-        btnBox.classList.add('active');
-        setExaggeration(6.0);
-        map.flyTo({
-            center: [-106.5677, 35.5194],
-            zoom: 10.74,
-            pitch: 83,
-            bearing: 10,
             speed: 0.8,
         });
     });
@@ -1330,6 +1671,68 @@ bearing: ${b.toFixed(0)}`;
         }
     });
 
+    // Dawn Patrol: spawn one balloon per layer height
+    btnDawn.addEventListener('click', () => {
+        isChasing = false;
+        clearPresetActive();
+        btnDawn.classList.add('active');
+
+        // Clear any existing dawn balloons
+        dawnBalloons = [];
+
+        // Spawn one balloon per layer at Balloon Fiesta Park with slight offsets
+        const layerKeys = Object.keys(LAYER_CONFIG);
+        layerKeys.forEach((key, i) => {
+            const layer = LAYER_CONFIG[key];
+            const balloon = new DawnBalloon(
+                layer.altitude === 0 ? 2600 : layer.altitude,
+                DAWN_COLORS[i % DAWN_COLORS.length]
+            );
+            // Slight random offset so they don't stack exactly
+            const offsetLng = (Math.random() - 0.5) * 0.005;
+            const offsetLat = (Math.random() - 0.5) * 0.005;
+            balloon.spawn(PARK_LNG + offsetLng, PARK_LAT + offsetLat);
+            dawnBalloons.push(balloon);
+        });
+    });
+
+    // Spread Layers: toggle equal altitude spacing
+    btnSpread.addEventListener('click', () => {
+        isChasing = false;
+        if (layersSpread) {
+            // Restore original altitudes
+            for (const key of Object.keys(LAYER_CONFIG)) {
+                LAYER_CONFIG[key].altitude = ORIGINAL_ALTITUDES[key];
+            }
+            layersSpread = false;
+            clearPresetActive();
+        } else {
+            // Spread layers equally, but lock canyon to its original altitude
+            // so it stays visually anchored to the Sandia Mountains canyon.
+            const canyonAlt = ORIGINAL_ALTITUDES.canyon; // 6000
+            const maxAlt = ORIGINAL_ALTITUDES.jet * 2;   // 36000
+            LAYER_CONFIG.surface.altitude = 0;
+            LAYER_CONFIG.canyon.altitude  = canyonAlt;    // locked to Sandias
+            // Distribute mid, high, jet equally above canyon
+            const upperKeys = ['mid', 'high', 'jet'];
+            const upperCount = upperKeys.length;
+            for (let i = 0; i < upperCount; i++) {
+                LAYER_CONFIG[upperKeys[i]].altitude =
+                    canyonAlt + ((i + 1) / upperCount) * (maxAlt - canyonAlt);
+            }
+            layersSpread = true;
+            clearPresetActive();
+            btnSpread.classList.add('active');
+        }
+        // Re-sort since altitudes changed
+        sortedLayers.length = 0;
+        Object.values(LAYER_CONFIG)
+            .sort((a, b) => a.altitude - b.altitude)
+            .forEach(l => sortedLayers.push(l));
+        // Rebuild particle pool to use new altitudes
+        updateParticlePools();
+    });
+
     // Map movement cancels chase and stops "still" optimizations
     const startMove = e => {
         if (e.originalEvent) {
@@ -1361,6 +1764,15 @@ bearing: ${b.toFixed(0)}`;
     safeAddListener('terrain-slider', 'input', e => {
         const val = parseFloat(e.target.value);
         setExaggeration(val);
+    });
+
+    // Particle density multiplier slider
+    safeAddListener('particle-density-slider', 'input', e => {
+        const val = parseFloat(e.target.value);
+        CONFIG.particleCount = Math.floor(25000 * val);
+        document.getElementById('particle-density-val').innerText =
+            val.toFixed(1) + 'x';
+        updateParticlePools();
     });
 
     // Airspace outline toggle
@@ -1432,8 +1844,28 @@ bearing: ${b.toFixed(0)}`;
     const infoToggle = document.getElementById('info-toggle');
     const infoPanel  = document.getElementById('info-panel');
 
+    // Triple-click info button → unlock advanced controls panel
+    let infoClickCount = 0;
+    let infoClickTimer = null;
+    const TRIPLE_CLICK_WINDOW = 500; // ms
+
     if (infoToggle && infoPanel) {
         infoToggle.addEventListener('click', () => {
+            // Track rapid clicks for triple-click detection
+            infoClickCount++;
+            if (infoClickTimer) clearTimeout(infoClickTimer);
+            infoClickTimer = setTimeout(() => { infoClickCount = 0; }, TRIPLE_CLICK_WINDOW);
+
+            if (infoClickCount >= 3) {
+                infoClickCount = 0;
+                // Toggle advanced controls visibility
+                const adv = controls.classList.toggle('advanced-unlocked');
+                // Also expand the controls if unlocking
+                if (adv) controls.classList.remove('collapsed');
+                else controls.classList.add('collapsed');
+                return; // don't also toggle the info panel
+            }
+
             const isOpen = infoPanel.classList.toggle('open');
             infoToggle.classList.toggle('open', isOpen);
             infoToggle.setAttribute('aria-expanded', String(isOpen));
@@ -1466,10 +1898,16 @@ bearing: ${b.toFixed(0)}`;
     });
 
     document.addEventListener('keydown', e => {
-        if (e.code === 'Space' && !e.repeat) setBurn(true);
+        if (e.code === 'Space') {
+            e.preventDefault(); // prevent focused buttons from re-triggering
+            if (!e.repeat) setBurn(true);
+        }
     });
     document.addEventListener('keyup', e => {
-        if (e.code === 'Space') setBurn(false);
+        if (e.code === 'Space') {
+            e.preventDefault();
+            setBurn(false);
+        }
     });
 
     // Spawn balloon wherever user clicks on the map
@@ -1479,8 +1917,47 @@ bearing: ${b.toFixed(0)}`;
     });
 
     /* ------------------------------------------------------------------
+     *  Inactivity auto-reset (museum kiosk)
+     * ------------------------------------------------------------------ */
+
+    const IDLE_TIMEOUT = 90_000; // 90 seconds
+    let idleTimer = null;
+
+    function resetIdleTimer() {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+            // Reset balloon to park, reset camera
+            player.spawn(PARK_LNG, PARK_LAT);
+            isChasing = false;
+            clearPresetActive();
+            setExaggeration(5.0);
+            map.flyTo({
+                center: [-106.587, 35.163],
+                zoom: 13.49,
+                pitch: 76,
+                bearing: 0,
+                speed: 0.8,
+            });
+        }, IDLE_TIMEOUT);
+    }
+
+    // Any touch/mouse/key resets the idle timer
+    ['touchstart', 'touchmove', 'mousedown', 'mousemove', 'keydown'].forEach(evt => {
+        document.addEventListener(evt, resetIdleTimer, { passive: true });
+    });
+
+    // Prevent context menu on long-press (kiosk)
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    /* ------------------------------------------------------------------
      *  Init
      * ------------------------------------------------------------------ */
 
     initWindSystem();
+
+    // Auto-spawn balloon at Balloon Fiesta Park once map is ready
+    map.on('load', () => {
+        player.spawn(PARK_LNG, PARK_LAT);
+        resetIdleTimer();
+    });
 });

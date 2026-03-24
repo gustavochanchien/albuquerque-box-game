@@ -1,3 +1,19 @@
+/* Kiosk protections */
+
+*,
+*::before,
+*::after {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+html {
+    touch-action: manipulation; /* disables double-tap zoom globally */
+    overscroll-behavior: none;
+}
+
 /* Basic layout */
 
 body,
@@ -51,22 +67,23 @@ html {
     position: absolute;
     bottom: 24px;
     left: 20px;
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     border: none;
     background: #ffffff;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     color: #00436d;
     font-weight: 700;
-    font-size: 18px;
-    line-height: 40px;
+    font-size: 20px;
+    line-height: 48px;
     text-align: center;
     cursor: pointer;
     z-index: 36;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    touch-action: manipulation;
     transition:
         transform 0.12s ease-out,
         box-shadow 0.12s ease-out,
@@ -422,6 +439,24 @@ html {
     font-size: 13px;
 }
 
+/* Advanced controls are locked by default — only visible after triple-click */
+
+#controls-scroll {
+    display: none;
+}
+
+#controls-toggle {
+    display: none;
+}
+
+#controls.advanced-unlocked #controls-scroll {
+    display: block;
+}
+
+#controls.advanced-unlocked #controls-toggle {
+    display: inline-flex;
+}
+
 /* Collapsed state: hide advanced controls, keep pilot footer */
 
 #controls.collapsed {
@@ -538,6 +573,10 @@ html {
 .layer-left input[type='checkbox'] {
     margin-right: 8px;
     accent-color: #00436dff;
+    width: 22px;
+    height: 22px;
+    min-width: 44px;
+    min-height: 44px;
 }
 
 .slider-container {
@@ -556,7 +595,9 @@ input[type='range'] {
     width: 100%;
     accent-color: #00436dff;
     cursor: pointer;
-    height: 4px;
+    height: 8px;
+    min-height: 44px;
+    touch-action: manipulation;
 }
 
 /* Pilot stats / burner */
@@ -576,24 +617,35 @@ input[type='range'] {
 
 #burner-btn {
     width: 100%;
-    padding: 18px 0;
+    padding: 28px 0;
     border: none;
-    border-radius: 8px;
+    border-radius: 14px;
     background: linear-gradient(135deg, #35b6c7ff, #2c72d3ff);
     color: white;
     font-weight: 800;
-    font-size: 20px;
-    letter-spacing: 1px;
+    font-size: 26px;
+    letter-spacing: 2px;
     cursor: pointer;
     box-shadow: 0 4px 10px rgba(68, 74, 222, 0.35);
     transition: transform 0.05s, background 0.12s, box-shadow 0.12s;
+    min-height: 64px;
+    touch-action: manipulation;
 }
 
 #burner-btn:active,
 #burner-btn.active {
     transform: scale(0.96);
-    background: #00436dff;
-    box-shadow: 0 2px 5px rgba(68, 74, 222, 0.35);
+    background: linear-gradient(135deg, #ff6a00, #ff3d00);
+    box-shadow: 0 0 24px rgba(255, 100, 0, 0.7), 0 0 48px rgba(255, 60, 0, 0.4);
+}
+
+@keyframes burner-pulse {
+    0%, 100% { box-shadow: 0 0 18px rgba(255, 100, 0, 0.6); }
+    50% { box-shadow: 0 0 36px rgba(255, 60, 0, 0.9), 0 0 60px rgba(255, 40, 0, 0.4); }
+}
+
+#burner-btn.active {
+    animation: burner-pulse 0.4s ease-in-out infinite;
 }
 
 .instruction {
@@ -640,17 +692,19 @@ input[type='range'] {
 
 .preset-btn {
     flex: 1;
-    padding: 8px 4px;
-    font-size: 10px;
+    padding: 12px 6px;
+    font-size: 12px;
     font-weight: bold;
     background: #f1f1f1;
     border: 1px solid #d0d0d0;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
     color: #333;
     transition: background 0.1s, box-shadow 0.1s, transform 0.08s;
     text-align: center;
-    line-height: 1.2;
+    line-height: 1.3;
+    min-height: 48px;
+    touch-action: manipulation;
 }
 
 .preset-btn:hover {
@@ -664,3 +718,4 @@ input[type='range'] {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
     transform: translateY(-1px);
 }
+
